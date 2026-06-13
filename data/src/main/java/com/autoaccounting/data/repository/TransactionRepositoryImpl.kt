@@ -22,12 +22,12 @@ class TransactionRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun getTransactionsByDateRange(startDate: LocalDateTime, endDate: LocalDateTime): Flow<List<Transaction>> {
-        val start = startDate.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        val end = endDate.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        return dao.getTransactionsByDateRange(start, end).map { entities ->
-            entities.map { it.toDomain() }
-        }
+    override fun getTransactionsByDateRange(
+        startDate: LocalDateTime,
+        endDate: LocalDateTime
+    ): Flow<List<Transaction>> {
+        return dao.getTransactionsByDateRange(startDate.toEpochMilli(), endDate.toEpochMilli())
+            .map { entities -> entities.map { it.toDomain() } }
     }
 
     override fun getTransactionsByCategory(categoryId: Long): Flow<List<Transaction>> {
@@ -52,17 +52,31 @@ class TransactionRepositoryImpl @Inject constructor(
         return dao.getById(id)?.toDomain()
     }
 
-    override suspend fun getTotalByTypeAndDateRange(type: String, startDate: LocalDateTime, endDate: LocalDateTime): Double? {
-        val start = startDate.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        val end = endDate.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        return dao.getTotalByTypeAndDateRange(type, start, end)
+    override suspend fun getTotalByTypeAndDateRange(
+        type: String,
+        startDate: LocalDateTime,
+        endDate: LocalDateTime
+    ): Double? {
+        return dao.getTotalByTypeAndDateRange(
+            type,
+            startDate.toEpochMilli(),
+            endDate.toEpochMilli()
+        )
     }
 
-    override suspend fun getExpenseSummaryByCategory(startDate: LocalDateTime, endDate: LocalDateTime): List<CategorySummary> {
-        val start = startDate.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        val end = endDate.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        return dao.getExpenseSummaryByCategory(start, end).map {
+    override suspend fun getExpenseSummaryByCategory(
+        startDate: LocalDateTime,
+        endDate: LocalDateTime
+    ): List<CategorySummary> {
+        return dao.getExpenseSummaryByCategory(
+            startDate.toEpochMilli(),
+            endDate.toEpochMilli()
+        ).map {
             CategorySummary(categoryId = it.categoryId, categoryName = null, total = it.total)
         }
     }
 }
+
+/** LocalDateTime → epoch millis，使用系统时区做一次转换。 */
+private fun LocalDateTime.toEpochMilli(): Long =
+    atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()

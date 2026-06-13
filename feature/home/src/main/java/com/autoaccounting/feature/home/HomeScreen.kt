@@ -89,8 +89,7 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            val allTransactions = uiState.todayTransactions + uiState.groupedByDate.values.flatten()
-            val recentTransactions = allTransactions.take(5)
+            val recentTransactions = uiState.recentTransactions
 
             if (recentTransactions.isEmpty()) {
                 item {

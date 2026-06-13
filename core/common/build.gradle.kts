@@ -23,5 +23,6 @@ android {
 dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.hilt.android)
+    implementation(libs.datastore.preferences)
     ksp(libs.hilt.compiler)
 }

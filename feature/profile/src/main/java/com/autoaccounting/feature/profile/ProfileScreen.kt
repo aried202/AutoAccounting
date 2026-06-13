@@ -72,12 +72,18 @@ class ProfileViewModel @Inject constructor(
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
     init {
-        _uiState.update { it.copy(username = userPrefs.username) }
+        viewModelScope.launch {
+            userPrefs.usernameFlow.collect { name ->
+                _uiState.update { it.copy(username = name) }
+            }
+        }
     }
 
     fun updateUsername(name: String) {
-        userPrefs.username = name
-        _uiState.update { it.copy(username = name) }
+        viewModelScope.launch {
+            userPrefs.setUsername(name)
+            _uiState.update { it.copy(username = name) }
+        }
     }
 }
 

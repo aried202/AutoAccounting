@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.autoaccounting.data.local.dao.AccountDao
 import com.autoaccounting.data.local.dao.BudgetDao
@@ -13,9 +14,6 @@ import com.autoaccounting.data.local.entity.AccountEntity
 import com.autoaccounting.data.local.entity.BudgetEntity
 import com.autoaccounting.data.local.entity.CategoryEntity
 import com.autoaccounting.data.local.entity.TransactionEntity
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 @Database(
     entities = [
@@ -25,7 +23,7 @@ import kotlinx.coroutines.launch
         BudgetEntity::class
     ],
     version = 3,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
 
@@ -37,49 +35,72 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         const val DATABASE_NAME = "auto_accounting.db"
 
+        // 数据库迁移示例
+        // 从 version 2 升级到 version 3 时的迁移
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE accounts ADD COLUMN currency TEXT NOT NULL DEFAULT 'CNY'")
+            }
+        }
+
         fun create(context: Context): AppDatabase {
             return Room.databaseBuilder(
                 context,
                 AppDatabase::class.java,
                 DATABASE_NAME
             )
-            .fallbackToDestructiveMigration()
-            .addCallback(object : Callback() {
-                override fun onCreate(db: SupportSQLiteDatabase) {
-                    super.onCreate(db)
-                    CoroutineScope(Dispatchers.IO).launch {
-                        val database = Room.databaseBuilder(
-                            context,
-                            AppDatabase::class.java,
-                            DATABASE_NAME
-                        ).build()
-                        database.categoryDao().insertAll(getDefaultCategories())
-                        database.accountDao().insert(getDefaultAccount())
-                    }
-                }
-            })
+            .addMigrations(MIGRATION_2_3)
+            .addCallback(DatabaseCallback())
             .build()
         }
+    }
+}
 
-        private fun getDefaultCategories(): List<CategoryEntity> {
-            return listOf(
-                CategoryEntity(name = "餐饮", icon = "restaurant", color = 0xFFFF6B6B, sortOrder = 1, isSystem = true),
-                CategoryEntity(name = "交通", icon = "directions_car", color = 0xFF4ECDC4, sortOrder = 2, isSystem = true),
-                CategoryEntity(name = "购物", icon = "shopping_bag", color = 0xFFFFBE0B, sortOrder = 3, isSystem = true),
-                CategoryEntity(name = "娱乐", icon = "sports_esports", color = 0xFFA855F7, sortOrder = 4, isSystem = true),
-                CategoryEntity(name = "居家", icon = "home", color = 0xFF3B82F6, sortOrder = 5, isSystem = true),
-                CategoryEntity(name = "医疗", icon = "local_hospital", color = 0xFFEF4444, sortOrder = 6, isSystem = true),
-                CategoryEntity(name = "教育", icon = "school", color = 0xFF10B981, sortOrder = 7, isSystem = true),
-                CategoryEntity(name = "其他", icon = "more_horiz", color = 0xFF6B7280, sortOrder = 8, isSystem = true)
+/**
+ * 数据库创建回调：使用 SupportSQLiteDatabase 同步插入默认数据，
+ * 避免在 onCreate 回调中启动协程（onCreate 是同步调用，且 Room 不应被多次构建）。
+ */
+private class DatabaseCallback : RoomDatabase.Callback() {
+    override fun onCreate(db: SupportSQLiteDatabase) {
+        super.onCreate(db)
+        seedDefaultCategories(db)
+        seedDefaultAccount(db)
+    }
+
+    private fun seedDefaultCategories(db: SupportSQLiteDatabase) {
+        val sql = """
+            INSERT INTO categories (name, icon, color, parentId, sortOrder, isSystem, createdAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """.trimIndent()
+        val now = System.currentTimeMillis()
+
+        val defaultCategories = listOf(
+            // 使用 ARGB 颜色：0xAARRGGBB
+            Triple("餐饮", "restaurant", 0xFFFF6B6BL),
+            Triple("交通", "directions_car", 0xFF4ECDC4L),
+            Triple("购物", "shopping_bag", 0xFFFFBE0BL),
+            Triple("娱乐", "sports_esports", 0xFFA855F7L),
+            Triple("居家", "home", 0xFF3B82F6L),
+            Triple("医疗", "local_hospital", 0xFFEF4444L),
+            Triple("教育", "school", 0xFF10B981L),
+            Triple("其他", "more_horiz", 0xFF6B7280L)
+        )
+
+        defaultCategories.forEachIndexed { index, (name, icon, color) ->
+            db.execSQL(
+                sql,
+                arrayOf(name, icon, color, null, index + 1, 1, now)
             )
         }
+    }
 
-        private fun getDefaultAccount(): AccountEntity {
-            return AccountEntity(
-                name = "现金",
-                type = "CASH",
-                balance = 0.0
-            )
-        }
+    private fun seedDefaultAccount(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            INSERT INTO accounts (name, type, balance, currency, isActive, createdAt)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+            arrayOf("现金", "CASH", 0.0, "CNY", 1, System.currentTimeMillis())
+        )
     }
 }
